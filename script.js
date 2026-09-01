@@ -31,12 +31,14 @@ let clickState = 0; // 0 = next click sets start, 1 = next click sets end
 // Update route mode display
 function updateModeDisplay(){
   const modeEl = document.getElementById('route-mode');
-  if (trailsMode) {
+  if (trailsMode && !drivingMode) {
     modeEl.textContent = 'Mode: Trails & Sidewalks';
-  } else if (drivingMode) {
+  } else if (drivingMode && !trailsMode) {
     modeEl.textContent = 'Mode: Driving';
-  } else {
+  } else if (trailsMode && drivingMode) {
     modeEl.textContent = 'Mode: Mixed';
+  } else {
+    modeEl.textContent = 'Mode: None Selected';
   }
 }
 
@@ -90,42 +92,62 @@ document.addEventListener('DOMContentLoaded', ()=>{
 async function requestRoute(){
   if (!startMarker || !endMarker){ showOverlay('Set both Start and End points first', 2000); return; }
   
-  // Determine which profile to use
-  let profile = 'driving';
-  let profileDisplay = 'car route';
-  
-  if (trailsMode && !drivingMode) {
-    profile = 'foot';
-    profileDisplay = 'walking route (trails & sidewalks)';
-  } else if (!trailsMode && drivingMode) {
-    profile = 'driving';
-    profileDisplay = 'driving route (roads only)';
-  } else if (trailsMode && drivingMode) {
-    profile = 'bike';
-    profileDisplay = 'mixed route (all accessible paths)';
+  if (!trailsMode && !drivingMode) {
+    showOverlay('Please select at least one mode (Trails or Driving)', 2000);
+    return;
   }
   
   clearRoute();
   const s = startMarker.getLatLng();
   const t = endMarker.getLatLng();
 
-  const url = `https://router.project-osrm.org/route/v1/${profile}/${s.lng},${s.lat};${t.lng},${t.lat}?overview=full&geometries=geojson&alternatives=true`;
+  // Route preference logic
+  let profile = 'driving';
+  let profileDisplay = 'car route';
+  let routeColor = '#1e90ff';
+  
+  if (trailsMode && !drivingMode) {
+    // Trails only - use foot profile with option to exclude highways
+    profile = 'foot';
+    profileDisplay = 'walking route (trails & sidewalks)';
+    routeColor = '#00dd88';
+  } else if (!trailsMode && drivingMode) {
+    // Driving only - use driving profile
+    profile = 'driving';
+    profileDisplay = 'driving route (roads only)';
+    routeColor = '#1e90ff';
+  } else if (trailsMode && drivingMode) {
+    // Both enabled - prefer smaller roads and trails with bike profile
+    profile = 'bike';
+    profileDisplay = 'mixed route (all accessible paths)';
+    routeColor = '#ffaa00';
+  }
+
+  const url = `https://router.project-osrm.org/route/v1/${profile}/${s.lng},${s.lat};${t.lng},${t.lat}?overview=full&geometries=geojson&alternatives=false&steps=false`;
   showOverlay(`Routing (${profileDisplay})...`, 2000);
+  
   try{
     const res = await fetch(url);
     if (!res.ok) throw new Error('Network error');
     const j = await res.json();
     if (j.code !== 'Ok' || !j.routes || j.routes.length === 0) throw new Error('No route found');
-    // choose the fastest/best route
+    
+    // Get the best route
     const route = j.routes[0].geometry;
     
-    // Color code by mode
-    let routeColor = '#1e90ff';
-    if (profile === 'foot') routeColor = '#00dd88';
-    else if (profile === 'bike') routeColor = '#ffaa00';
+    routeLayer = L.geoJSON(route, { 
+      style: { 
+        color: routeColor, 
+        weight: 5, 
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round'
+      } 
+    }).addTo(map);
     
-    routeLayer = L.geoJSON(route, { style: { color: routeColor, weight: 5, opacity: 0.95 } }).addTo(map);
     map.fitBounds(routeLayer.getBounds(), { padding: [20,20] });
     showOverlay(`${profileDisplay} drawn`, 1500);
-  }catch(err){ showOverlay(`Route failed: ${err.message}`, 3000); }
+  }catch(err){ 
+    showOverlay(`Route failed: ${err.message}`, 3000); 
+  }
 }
