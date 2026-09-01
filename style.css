@@ -1,30 +1,42 @@
-/* style.css - simple layout for the map game */
+/* style.css - layout for the map game (fixed so sidebar doesn't block the map)
+   Reworked to use flexbox so the sidebar and map don't overlap and interactions are preserved.
+*/
 
-html,body {
-  height:100%;
-  margin:0;
+html, body {
+  height: 100%;
+  margin: 0;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-}
-
-#map{
-  position:fixed;
-  left:260px;
-  top:0;
-  right:0;
-  bottom:0;
+  display: flex;
+  flex-direction: row; /* sidebar + map side-by-side */
+  min-height: 100vh;
 }
 
 #sidebar{
-  position:fixed;
-  left:0;
-  top:0;
-  bottom:0;
-  width:260px;
-  padding:16px;
-  box-sizing:border-box;
-  background:linear-gradient(180deg,#ffffff,#f6f9fb);
-  border-right:1px solid #e6eef3;
-  overflow:auto;
+  width: 260px;
+  padding: 16px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg,#ffffff,#f6f9fb);
+  border-right: 1px solid #e6eef3;
+  overflow: auto;
+  position: relative; /* keep it in normal flow */
+  z-index: 2; /* ensure it sits above the map visually but doesn't cover it */
+  flex: 0 0 260px;
+}
+
+#map{
+  flex: 1 1 auto;
+  position: relative;
+  z-index: 1;
+  height: 100vh; /* ensure Leaflet fills available height */
+  min-height: 100vh;
+}
+
+/* ensure Leaflet's internal container fills the #map element */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #cde;
+  pointer-events: auto; /* allow interactions */
 }
 
 #controls{display:flex;flex-direction:column;gap:6px;margin-top:8px}
@@ -41,9 +53,9 @@ html,body {
 .button-item.continent{background:#e67e22}
 #reset{margin-top:10px;padding:8px 10px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
 
-.leaflet-container{background:#cde}
-
 @media (max-width:720px){
-  #sidebar{position:relative;width:100%;height:auto;border-right:none}
-  #map{left:0;top:240px}
+  /* stack vertically on small screens */
+  html, body { flex-direction: column; }
+  #sidebar { width: 100%; flex: 0 0 auto; }
+  #map { height: calc(100vh - 240px); min-height: 400px; }
 }
