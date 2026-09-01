@@ -12,7 +12,13 @@
     <h1>World Map</h1>
     <p class="muted">Simple pathfinding: Car mode only (fastest on main roads). Click the map to set Start and End points; the route will be calculated automatically.</p>
 
-    <div id="controls"></div>
+    <div id="controls">
+      <div class="pill-row" role="group" aria-label="Pathfinding preferences">
+        <button id="pill-scenery" class="pill" aria-pressed="false">Scenery Pathfinder</button>
+        <button id="pill-trails" class="pill" aria-pressed="false">Walking Trails</button>
+        <button id="pill-outline" class="pill" aria-pressed="false">Outline Scenery</button>
+      </div>
+    </div>
 
     <div class="row">
       <div class="mode">Mode: Car</div>
