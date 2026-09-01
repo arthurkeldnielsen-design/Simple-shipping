@@ -3,29 +3,41 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simple Shipping — Simple Pathfinding (Car)</title>
+  <title>Simple Shipping — Simple Pathfinding</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="sidebar">
     <h1>World Map</h1>
-    <p class="muted">Simple pathfinding: Car mode only (fastest on main roads). Click the map to set Start and End points; the route will be calculated automatically.</p>
+    <p class="muted">Click the map to set Start and End points; the route will be calculated automatically.</p>
 
     <div id="controls">
-      <div class="scenery-info">
-        <p style="margin:0;font-size:13px;font-weight:600;color:#00ff00;">✓ Scenery Detection Active</p>
-        <p style="margin:4px 0 0 0;font-size:11px;color:#9aa6b2;">Mountains, rivers & ranges outlined</p>
+      <div class="mode-toggle">
+        <label class="toggle-label">
+          <input type="checkbox" id="trails-mode" />
+          <span class="toggle-switch"></span>
+          <span class="toggle-text">Trails & Sidewalks</span>
+        </label>
+        <p class="toggle-hint">Small trails and roads with sidewalks</p>
+      </div>
+      <div class="mode-toggle">
+        <label class="toggle-label">
+          <input type="checkbox" id="driving-mode" checked />
+          <span class="toggle-switch"></span>
+          <span class="toggle-text">Driving Mode</span>
+        </label>
+        <p class="toggle-hint">Roads where cars can drive</p>
       </div>
     </div>
 
     <div class="row">
-      <div class="mode">Mode: Car</div>
+      <div id="route-mode">Mode: Driving</div>
       <button id="reset" class="btn outline">Reset</button>
     </div>
 
     <div id="diag" class="muted small"></div>
-    <footer class="attribution muted small">Satellite: Esri World Imagery · Routing: OSRM public demo (driving profile)</footer>
+    <footer class="attribution muted small">Satellite: Esri World Imagery · Routing: OSRM public demo</footer>
   </div>
 
   <div id="map"></div>
