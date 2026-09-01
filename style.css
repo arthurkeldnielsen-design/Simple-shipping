@@ -45,70 +45,33 @@ h1{margin:0 0 8px 0;font-size:20px}
 .mode{color:var(--muted);font-size:14px}
 .mode input{margin-right:8px}
 
-/* Scenery Toggle Styles */
-.scenery-toggle-container{
-  background:var(--card);
-  border:1px solid rgba(255,255,255,0.08);
+/* Scenery Detection Styles */
+.scenery-info{
+  background:linear-gradient(135deg, rgba(0,255,0,0.1) 0%, rgba(0,200,150,0.1) 100%);
+  border:1px solid rgba(0,255,0,0.3);
   border-radius:12px;
-  padding:16px;
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  box-shadow:0 0 8px rgba(0,255,0,0.15);
+}
+
+.scenery-marker{
   display:flex;
   align-items:center;
   justify-content:center;
 }
 
-.scenery-label{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  cursor:pointer;
-  user-select:none;
-  width:100%;
-}
-
-.scenery-checkbox{
-  display:none;
-}
-
-.toggle-track{
-  display:inline-flex;
-  align-items:center;
-  justify-content:flex-start;
-  width:56px;
-  height:32px;
-  background:#3a4450;
-  border-radius:16px;
-  padding:2px;
-  box-sizing:border-box;
-  transition:background-color 0.3s ease, box-shadow 0.3s ease;
-  position:relative;
-  flex-shrink:0;
-}
-
-.toggle-circle{
-  display:block;
-  width:28px;
-  height:28px;
-  background:white;
-  border-radius:50%;
-  transition:transform 0.3s ease, box-shadow 0.3s ease;
-  position:absolute;
-  left:2px;
-}
-
-.scenery-checkbox:checked + .toggle-track{
-  background:var(--accent);
-  box-shadow:0 0 12px rgba(30,144,255,0.4);
-}
-
-.scenery-checkbox:checked + .toggle-track .toggle-circle{
-  transform:translateX(24px);
-  box-shadow:0 2px 8px rgba(0,0,0,0.3);
-}
-
-.toggle-text{
-  font-weight:500;
-  font-size:14px;
-  color:#e6eef3;
+.mountain-label{
+  background:rgba(255,107,53,0.9);
+  border:1px solid rgba(255,107,53,0.5);
+  border-radius:6px;
+  padding:4px 8px;
+  font-size:11px;
+  font-weight:600;
+  color:#fff;
+  white-space:nowrap;
+  box-shadow:0 2px 6px rgba(0,0,0,0.4);
 }
 
 .leaflet-container{background:#14202b}
@@ -119,7 +82,7 @@ h1{margin:0 0 8px 0;font-size:20px}
   #sidebar{position:relative;width:100%;height:auto;border-right:none}
   #map{left:0;top:220px}
   
-  .scenery-toggle-container{
+  .scenery-info{
     margin-top:12px;
   }
 }
