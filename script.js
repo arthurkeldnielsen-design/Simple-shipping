@@ -1,152 +1,122 @@
-// script.js - Satellite + Enhance option for maximum tile quality
+// script.js - Satellite map with a simple chat-driven routing feature
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Create map
-  const map = L.map('map', { worldCopyJump: true }).setView([20, 0], 2);
-  window._map = map; // expose for debugging
+// Helper: city waypoints for Denmark (used for 'around denmark')
+const DENMARK_WAYPOINTS = [
+  { name: 'Copenhagen', coord: [12.5683, 55.6761] },
+  { name: 'Malmö', coord: [13.0038, 55.6050] },
+  { name: 'Køge', coord: [12.1806, 55.4590] },
+  { name: 'Roskilde', coord: [12.0803, 55.6419] },
+  { name: 'Odense', coord: [10.4024, 55.4038] },
+  { name: 'Esbjerg', coord: [8.4594, 55.4765] },
+  { name: 'Aalborg', coord: [9.9217, 57.0488] },
+  { name: 'Aarhus', coord: [10.2039, 56.1629] },
+  { name: 'Copenhagen', coord: [12.5683, 55.6761] }
+];
 
-  // Satellite: Esri World Imagery (good high-resolution tiles)
-  const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles © Esri',
-    maxZoom: 19
+let routeLayer = null;
+let markers = [];
+
+function addMessage(text, who='system'){
+  const m = document.createElement('div');
+  m.className = 'message ' + (who === 'user' ? 'user' : 'system');
+  m.textContent = text;
+  const box = document.getElementById('messages');
+  box.appendChild(m);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearRoute(){
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  markers.forEach(m => map.removeLayer(m)); markers = [];
+}
+
+function buildOSRMCoords(points){
+  // OSRM expects lon,lat pairs separated by ;
+  return points.map(p => p.coord ? (p.coord[0] + ',' + p.coord[1]) : (p[0] + ',' + p[1])).join(';');
+}
+
+async function requestOSRMRoute(profile, points){
+  try{
+    const coords = buildOSRMCoords(points);
+    // ask OSRM for a route visiting the points in order
+    const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
+    addMessage('Requesting route from OSRM...', 'system');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Network response not ok');
+    const j = await res.json();
+    if (j.code !== 'Ok' || !j.routes || j.routes.length === 0) throw new Error('No route found');
+    return j.routes[0].geometry;
+  }catch(err){
+    throw err;
+  }
+}
+
+function drawRoute(geojson){
+  clearRoute();
+  routeLayer = L.geoJSON(geojson, { style: { color: '#ff6b6b', weight: 4, opacity: 0.9 } }).addTo(map);
+  map.fitBounds(routeLayer.getBounds(), { padding: [20,20] });
+}
+
+function placeMarkers(points){
+  markers = points.map(p => {
+    const m = L.circleMarker([p.coord[1], p.coord[0]], { radius:6, color:'#1e90ff', fill:true, fillOpacity:0.9 }).addTo(map);
+    m.bindPopup(p.name || `${p.coord[1].toFixed(4)}, ${p.coord[0].toFixed(4)}`);
+    return m;
   });
+}
 
-  // Enhanced satellite layer (tries to request higher-res tiles where available)
-  // Uses detectRetina and larger tileSize/zoomOffset hints for retina/high-res tiles
-  const esriEnhanced = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles © Esri',
-    maxZoom: 20,
-    detectRetina: true,
-    tileSize: 512,
-    zoomOffset: -1
-  });
+// parse chat text into action
+function parseAndExecute(text){
+  const t = text.toLowerCase();
+  // default profile: driving
+  let profile = 'driving';
+  if (t.includes('walk') || t.includes('walking') || t.includes('trail') || t.includes('hike')) profile = 'foot';
 
-  // Streets: OpenStreetMap (fallback)
-  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
-
-  // Start with satellite layer
-  let currentBase = 'sat';
-  esriSat.addTo(map);
-
-  // Simple places
-  const places = {
-    'North America': { bounds: [[72, -168], [7, -50]], type: 'continent' },
-    'South America': { bounds: [[12, -92], [-56, -34]], type: 'continent' },
-    'Europe': { bounds: [[72, -25], [34, 45]], type: 'continent' },
-    'Africa': { bounds: [[37, -18], [-35, 52]], type: 'continent' },
-    'Asia': { bounds: [[81, 26], [1, 180]], type: 'continent' },
-    'Oceania': { bounds: [[-10, 110], [-50, 180]], type: 'continent' },
-
-    'United States': { center: [39.0, -98.5], zoom: 4, type: 'country' },
-    'Brazil': { center: [-14.2, -51.9], zoom: 4, type: 'country' },
-    'India': { center: [21.0, 78.0], zoom: 5, type: 'country' },
-    'Australia': { center: [-25.0, 133.0], zoom: 4, type: 'country' },
-    'France': { center: [46.5, 2.5], zoom: 6, type: 'country' },
-    'South Africa': { center: [-30.6, 22.9], zoom: 5, type: 'country' }
-  };
-
-  const controls = document.getElementById('controls');
-  const diag = document.getElementById('diag');
-  let currentHighlight = null;
-
-  function makeBtn(name, meta){
-    const b = document.createElement('button');
-    b.className = 'btn ' + (meta.type === 'country' ? 'country' : 'continent');
-    b.textContent = name;
-    b.onclick = () => {
-      clearOverlay();
-      if (meta.bounds){
-        map.fitBounds(meta.bounds, { padding: [20,20] });
-        highlightBounds(meta.bounds);
-      } else if (meta.center){
-        map.setView(meta.center, meta.zoom || 6, { animate: true });
-        highlightCircle(meta.center);
-      }
-      setTimeout(()=>map.invalidateSize(), 200);
-    };
-    return b;
+  if (t.includes('around') && t.includes('denmark')){
+    addMessage(`Planning a route around Denmark, profile: ${profile}`,'system');
+    // use DANISH waypoints
+    const points = DENMARK_WAYPOINTS;
+    placeMarkers(points);
+    // OSRM expects lon,lat pairs; our points already in [lon,lat]
+    requestOSRMRoute(profile, points)
+      .then(geo => { drawRoute(geo); addMessage('Route drawn.'); })
+      .catch(err => { addMessage('Routing failed: ' + err.message); });
+    return;
   }
 
-  Object.entries(places).forEach(([k,v]) => controls.appendChild(makeBtn(k,v)));
+  // simple 'from X to Y' handling could be added, but for now respond with help
+  addMessage("Sorry — I only support simple 'around <country>' requests right now (try: 'around Denmark by car' or 'around Denmark walking').", 'system');
+}
 
-  // UI toggles
-  document.getElementById('satToggle').addEventListener('click', () => {
-    if (currentBase === 'sat') return;
-    removeBaseLayers();
-    esriSat.addTo(map);
-    currentBase = 'sat';
-    clearOverlay();
+// --- Map initialization ---
+const map = L.map('map', { worldCopyJump: true }).setView([56.0, 9.0], 6);
+window.map = map;
+
+const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Tiles © Esri', maxZoom: 19
+});
+const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 });
+
+esriSat.addTo(map);
+
+// UI hookups
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('satToggle').addEventListener('click', ()=>{
+    if (!map.hasLayer(esriSat)){ map.addLayer(esriSat); if (map.hasLayer(osm)) map.removeLayer(osm); }
   });
 
-  document.getElementById('enhance').addEventListener('click', () => {
-    if (currentBase === 'enhanced') return;
-    removeBaseLayers();
-    esriEnhanced.addTo(map);
-    currentBase = 'enhanced';
-    clearOverlay();
-    // optionally zoom in one level to encourage higher-res tiles to load
-    const z = map.getZoom();
-    if (z < esriEnhanced.options.maxZoom) map.setZoom(Math.min(z+1, esriEnhanced.options.maxZoom));
+  document.getElementById('reset').addEventListener('click', ()=>{
+    clearRoute(); map.setView([56.0, 9.0], 6);
   });
 
-  document.getElementById('reset').addEventListener('click', () => {
-    map.setView([20,0],2);
-    if (currentHighlight){ map.removeLayer(currentHighlight); currentHighlight = null; }
-    clearOverlay();
-    setTimeout(()=>map.invalidateSize(),200);
+  const send = document.getElementById('send');
+  const input = document.getElementById('chatText');
+  send.addEventListener('click', ()=>{
+    const txt = input.value.trim(); if (!txt) return;
+    addMessage(txt,'user'); input.value = '';
+    parseAndExecute(txt);
   });
+  input.addEventListener('keydown', e=>{ if (e.key === 'Enter'){ send.click(); } });
 
-  function removeBaseLayers(){
-    [esriSat, esriEnhanced, osm].forEach(l => { try{ if (map.hasLayer(l)) map.removeLayer(l); }catch(e){} });
-  }
-
-  function highlightCircle(center){
-    if (currentHighlight) map.removeLayer(currentHighlight);
-    currentHighlight = L.circle(center, { radius: 500000, color: '#ff3333', weight: 2, fill:false }).addTo(map);
-  }
-
-  function highlightBounds(bounds){
-    if (currentHighlight) map.removeLayer(currentHighlight);
-    currentHighlight = L.rectangle(bounds, { color: '#33cc33', weight: 2, fill:false }).addTo(map);
-  }
-
-  // overlay helpers
-  function showOverlay(text){
-    clearOverlay();
-    const o = document.createElement('div');
-    o.id = 'map-overlay';
-    o.innerText = text;
-    document.getElementById('map').appendChild(o);
-    diag.textContent = text;
-  }
-  function clearOverlay(){
-    const ex = document.getElementById('map-overlay'); if (ex) ex.remove(); diag.textContent = '';
-  }
-
-  // handle tile errors - try fallback if base fails
-  esriEnhanced.on('tileerror', () => {
-    showOverlay('Enhanced tiles failed to load. Falling back to standard satellite.');
-    removeBaseLayers();
-    esriSat.addTo(map);
-    currentBase = 'sat';
-  });
-
-  esriSat.on('tileerror', () => {
-    showOverlay('Satellite tiles failed to load. Falling back to OpenStreetMap.');
-    removeBaseLayers();
-    osm.addTo(map);
-    currentBase = 'osm';
-  });
-
-  osm.on('tileerror', () => {
-    showOverlay('Tile servers not reachable. Check network or disable blockers.');
-  });
-
-  // size fix
-  setTimeout(()=>map.invalidateSize(), 200);
-  window.addEventListener('resize', ()=> setTimeout(()=>map.invalidateSize(),150));
-
-  // debug click
-  map.on('click', e => console.log('Map clicked at', e.latlng));
-
+  addMessage('Hello — ask me to plan simple routes. Try: "around Denmark by car"', 'system');
 });

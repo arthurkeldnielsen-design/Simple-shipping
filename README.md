@@ -1,16 +1,22 @@
-# Simple Shipping — Dark Satellite Map (updated)
+# Simple Shipping — Chat-driven Routing
 
-This update removes the old dark basemap option and adds an "Enhance" button that requests higher-resolution satellite tiles when you need maximum quality while zoomed in.
+This update removes the Enhance option and adds a small chat box UI to the sidebar. You can now type simple navigation requests such as:
+
+- "around Denmark by car"
+- "around Denmark walking"
 
 How it works
-- Default base: Esri World Imagery (satellite)
-- Enhance: switches to an enhanced satellite tile layer that uses detectRetina and tile/zoom hints to request higher-resolution tiles where available. If enhanced tiles fail, it falls back to standard satellite, then OpenStreetMap.
+- The chat parser recognizes "around <country>" for Denmark (built-in) and picks a set of waypoints (major cities).
+- It sends the waypoint list to the public OSRM demo server (router.project-osrm.org) using the chosen profile: `driving` for roads and `foot` for walking/trails.
+- The returned route geometry is drawn on the map and the map view is fit to the route.
 
-Usage
-- Open the page (serve locally or deploy to GitHub Pages).
-- Click "Satellite" to ensure standard satellite tiles are used.
-- Click "Enhance" to request maximum available tile quality. The map will try to zoom one level in to encourage higher-resolution tiles to load.
+Notes and limits
+- This is a small demo parser; adding general geocoding would let you accept arbitrary place names. We can integrate Nominatim for free geocoding.
+- Routing uses the public OSRM demo server — it's free for testing but subject to usage limits. For production or high-volume use, use your own routing server or a provider with an API key.
 
-Notes
-- "Enhance" cannot force new imagery beyond what the provider exposes. For truly higher-resolution commercial imagery you would need a provider/API with explicit high-res tiles or an access token.
-- This is implemented with free tile endpoints (Esri and OSM). If you later add a paid provider (Mapbox/Google/Planet) we can wire it into the enhance flow behind an API key.
+If you want me to also add:
+- Geocoding (Nominatim) so you can say "around Portugal" and it looks up country bounds automatically.
+- Support for arbitrary "from A to B" directions.
+- A small "follow walking trails" enhancement that prefers foot profile and shows trailheads.
+
+Tell me which extra features you want and I’ll push them next.

@@ -3,20 +3,30 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simple Shipping — Dark Satellite Map</title>
+  <title>Simple Shipping — Satellite Map with Chat Routing</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="sidebar">
     <h1>World Map</h1>
-    <p class="muted">Click a continent or country to zoom. Toggle base layer or enhance for maximum tile quality when zoomed in.</p>
+    <p class="muted">Use the chat to ask for simple navigation tasks, e.g. "around Denmark by car" or "around Denmark walking". The map will follow roads or walking trails when possible.</p>
+
     <div id="controls"></div>
 
     <div class="row">
       <button id="satToggle" class="btn">Satellite</button>
-      <button id="enhance" class="btn">Enhance</button>
       <button id="reset" class="btn outline">Reset</button>
+    </div>
+
+    <hr />
+
+    <div id="chat">
+      <div id="messages"></div>
+      <div id="chat-input">
+        <input id="chatText" placeholder="Ask: e.g. 'around Denmark by car'" />
+        <button id="send">Send</button>
+      </div>
     </div>
 
     <div id="diag" class="muted small"></div>
