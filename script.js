@@ -1,4 +1,5 @@
 // script.js - add drawing + snapping to roads/trails
+// Updated: support holding Space to draw (temporary draw while holding Space), keep Draw button for touch users
 
 // Existing Denmark waypoints for chat routing
 const DENMARK_WAYPOINTS = [
@@ -32,7 +33,7 @@ function clearRoute(){
 
 function buildOSRMCoords(points){
   // OSRM expects lon,lat pairs separated by ;
-  return points.map(p => p.coord ? (p.coord[0] + ',' + p.coord[1]) : (p[1] + ',' + p[0])).join(';');
+  return points.map(p => p.coord ? (p.coord[0] + ',' + p.coord[1]) : (p.lng + ',' + p.lat)).join(';');
 }
 
 async function requestOSRMRoute(profile, points){
@@ -93,32 +94,54 @@ const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
 
 esriSat.addTo(map);
 
-// --- Drawing tools ---
-let isDrawMode = false;
+// --- Drawing tools (Space-held draw) ---
+let drawEnabledByButton = false; // toggled by Draw button for touch users
+let drawTemporary = false; // active while holding Space
+let isDrawMode = false; // derived
 let isMouseDown = false;
 let drawnPoints = []; // array of LatLng
 let tempLine = null;
 let cursorDot = null;
 
-function enableDrawMode(enable){
-  isDrawMode = enable;
+function updateDrawModeUI(){
+  const should = drawEnabledByButton || drawTemporary;
+  if (should === isDrawMode) return; // no change
+  isDrawMode = should;
   const body = document.body;
-  if (enable){
+  if (isDrawMode){
     body.classList.add('drawing-cursor');
-    if (!cursorDot){
-      cursorDot = document.createElement('div'); cursorDot.className = 'cursor-dot'; document.body.appendChild(cursorDot);
-    }
+    if (!cursorDot){ cursorDot = document.createElement('div'); cursorDot.className = 'cursor-dot'; document.body.appendChild(cursorDot); }
     cursorDot.style.display = 'block';
     addMessage('Draw mode ON: hold mouse and drag to draw. Press Enter to snap to roads/trails.', 'system');
   } else {
     body.classList.remove('drawing-cursor');
     if (cursorDot) cursorDot.style.display = 'none';
     addMessage('Draw mode OFF', 'system');
+    // cleanup any unfinished drawing
+    if (tempLine){ map.removeLayer(tempLine); tempLine = null; }
+    drawnPoints = [];
+    isMouseDown = false;
   }
 }
 
-map.getContainer().addEventListener('mousedown', (e)=>{
+function enableDrawByButton(enable){ drawEnabledByButton = enable; updateDrawModeUI(); }
+
+// Helper to test if an element should allow space to draw (ignore when typing)
+function isTyping(){
+  const ae = document.activeElement;
+  if (!ae) return false;
+  const tag = ae.tagName && ae.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return true;
+  if (ae.isContentEditable) return true;
+  return false;
+}
+
+// pointer/mouse handlers
+map.getContainer().addEventListener('pointerdown', (e)=>{
+  // only start drawing if draw mode active
   if (!isDrawMode) return;
+  // only left button
+  if (e.button !== 0) return;
   isMouseDown = true;
   drawnPoints = [];
   if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
@@ -127,13 +150,11 @@ map.getContainer().addEventListener('mousedown', (e)=>{
   tempLine = L.polyline(drawnPoints, { color: '#ff8c42', weight: 3, dashArray: '6 4' }).addTo(map);
 });
 
-map.getContainer().addEventListener('mousemove', (e)=>{
+map.getContainer().addEventListener('pointermove', (e)=>{
   if (!isDrawMode) return;
   const p = map.mouseEventToLatLng(e);
-  // update floating cursor dot
   if (cursorDot){ cursorDot.style.left = e.clientX + 8 + 'px'; cursorDot.style.top = e.clientY + 8 + 'px'; }
   if (isMouseDown){
-    // add point if moved a small distance
     const last = drawnPoints[drawnPoints.length-1];
     if (!last || last.distanceTo(p) > 5){
       drawnPoints.push(p);
@@ -143,13 +164,13 @@ map.getContainer().addEventListener('mousemove', (e)=>{
   }
 });
 
-map.getContainer().addEventListener('mouseup', (e)=>{
+map.getContainer().addEventListener('pointerup', (e)=>{
   if (!isDrawMode) return;
+  if (e.button !== 0) return;
   isMouseDown = false;
-  // keep the drawn line until Enter pressed
 });
 
-// touch support
+// touch: pointer events cover touch as well, but keep touch handlers as fallback
 map.getContainer().addEventListener('touchstart', (e)=>{
   if (!isDrawMode) return;
   isMouseDown = true;
@@ -158,29 +179,51 @@ map.getContainer().addEventListener('touchstart', (e)=>{
   const touch = e.touches[0]; const p = map.mouseEventToLatLng(touch);
   drawnPoints.push(p);
   tempLine = L.polyline(drawnPoints, { color: '#ff8c42', weight: 3, dashArray: '6 4' }).addTo(map);
-});
+}, {passive:false});
 map.getContainer().addEventListener('touchmove', (e)=>{
   if (!isDrawMode) return;
   const touch = e.touches[0]; const p = map.mouseEventToLatLng(touch);
   if (!p) return;
   const last = drawnPoints[drawnPoints.length-1];
   if (!last || last.distanceTo(p) > 5){ drawnPoints.push(p); if (tempLine) tempLine.setLatLngs(drawnPoints); }
-});
+}, {passive:false});
 map.getContainer().addEventListener('touchend', (e)=>{ if (!isDrawMode) return; isMouseDown = false; });
 
-// keyboard: Enter to snap, Esc to cancel
+// keyboard handling: Enter to snap, Esc to cancel, Space hold to draw
 window.addEventListener('keydown', (e)=>{
+  // ignore repeated events
+  if (e.repeat) return;
+
+  // Space to temporarily enable draw (unless typing in an input)
+  if (e.code === 'Space'){
+    if (isTyping()) return; // don't hijack typing
+    // prevent page scrolling while holding space for drawing
+    e.preventDefault();
+    drawTemporary = true;
+    updateDrawModeUI();
+    return;
+  }
+
   if (!isDrawMode) return;
   if (e.key === 'Enter'){
     e.preventDefault();
-    if (!drawnPoints || drawnPoints.length < 2){ addMessage('Draw a path first (hold and drag), then press Enter.', 'system'); return; }
+    if (!drawnPoints || drawnPoints.length < 2){ addMessage('Draw a path first (hold Space and drag), then press Enter.', 'system'); return; }
     snapDrawnPath();
   }
   if (e.key === 'Escape'){
-    // cancel drawing
+    // cancel drawing (only cancel temporary or full)
     if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
     drawnPoints = [];
-    enableDrawMode(false);
+    // if draw was only temporary, disabling will be handled on keyup; if button-enabled, keep it
+    if (!drawEnabledByButton){ drawTemporary = false; updateDrawModeUI(); }
+  }
+});
+
+window.addEventListener('keyup', (e)=>{
+  if (e.code === 'Space'){
+    // release temporary draw
+    drawTemporary = false;
+    updateDrawModeUI();
   }
 });
 
@@ -189,7 +232,7 @@ async function snapDrawnPath(){
   // build simple sampling of points to avoid huge URLs
   const sample = sampleLatLngs(drawnPoints, 100); // at most 100 points
   // Build coords in lon,lat for OSRM route
-  const coords = sample.map(ll => `${ll.lng},${ll.lat}`).join(';');
+  const coords = sample.map(ll => ({ lng: ll.lng, lat: ll.lat }));
   // decide profile
   const trailOn = document.getElementById('trailToggle').checked;
   const roadOn = document.getElementById('roadToggle').checked;
@@ -197,13 +240,8 @@ async function snapDrawnPath(){
   if (trailOn && !roadOn) profile = 'foot';
   else if (trailOn && roadOn) profile = 'foot'; // prefer trail when both on
   else profile = 'driving';
-  const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
   try{
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Network response not ok');
-    const j = await res.json();
-    if (j.code !== 'Ok' || !j.routes || j.routes.length === 0) throw new Error('No route found');
-    const geo = j.routes[0].geometry;
+    const geo = await requestOSRMRoute(profile, coords);
     // draw snapped route
     clearRoute();
     routeLayer = L.geoJSON(geo, { style: { color: '#ff8c42', weight: 4, opacity: 0.95 } }).addTo(map);
@@ -212,7 +250,8 @@ async function snapDrawnPath(){
     // cleanup temp draw
     if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
     drawnPoints = [];
-    enableDrawMode(false);
+    // If draw was temporary, turn it off now (user released Space anyway)
+    if (!drawEnabledByButton){ drawTemporary = false; updateDrawModeUI(); }
   }catch(err){
     addMessage('Snap failed: ' + err.message, 'system');
   }
@@ -233,12 +272,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if (!map.hasLayer(esriSat)){ map.addLayer(esriSat); if (map.hasLayer(osm)) map.removeLayer(osm); }
   });
 
-  document.getElementById('drawToggle').addEventListener('click', ()=>{
-    enableDrawMode(!isDrawMode);
+  // Draw button toggles persistent draw mode (useful for touch devices)
+  document.getElementById('drawToggle')?.addEventListener('click', ()=>{
+    enableDrawByButton(!drawEnabledByButton);
   });
 
   document.getElementById('reset').addEventListener('click', ()=>{
-    clearRoute(); if (tempLine) { map.removeLayer(tempLine); tempLine = null; } drawnPoints = []; map.setView([56.0, 9.0], 6); enableDrawMode(false);
+    clearRoute(); if (tempLine) { map.removeLayer(tempLine); tempLine = null; } drawnPoints = []; map.setView([56.0, 9.0], 6); drawEnabledByButton = false; updateDrawModeUI();
   });
 
   const send = document.getElementById('send');
@@ -250,5 +290,5 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
   input.addEventListener('keydown', e=>{ if (e.key === 'Enter'){ send.click(); } });
 
-  addMessage('Hello — use Draw to sketch a path and press Enter to snap it to roads or trails. Try: "around Denmark by car" in the chat.', 'system');
+  addMessage('Hello — hold Space and draw to sketch a route; press Enter to snap to roads/trails. Use Draw button for touch devices.', 'system');
 });
