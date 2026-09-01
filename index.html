@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simple Shipping — World Map Zoom Game</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="sidebar">
+    <h1>World Map Zoom Game</h1>
+    <p>Click a continent or country to zoom in.</p>
+    <div id="controls"></div>
+    <button id="reset">Reset View</button>
+    <hr />
+    <p style="font-size:12px;color:#666;margin-top:8px;">Built with Leaflet and OpenStreetMap tiles.</p>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
