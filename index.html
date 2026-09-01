@@ -10,13 +10,12 @@
 <body>
   <div id="sidebar">
     <h1>World Map</h1>
-    <p class="muted">Draw a path, then press Enter to snap it to roads or trails. Use the toggles to prefer Road or Trail routing.</p>
+    <p class="muted">Press Space to start drawing a freehand path; press Space again to snap it to roads or trails. Use the toggles to prefer Road or Trail routing.</p>
 
     <div id="controls"></div>
 
     <div class="row">
       <button id="satToggle" class="btn">Satellite</button>
-      <button id="drawToggle" class="btn">Draw</button>
       <button id="reset" class="btn outline">Reset</button>
     </div>
 
@@ -27,16 +26,8 @@
 
     <hr />
 
-    <div id="chat">
-      <div id="messages"></div>
-      <div id="chat-input">
-        <input id="chatText" placeholder="Ask: e.g. 'around Denmark by car'" />
-        <button id="send">Send</button>
-      </div>
-    </div>
-
     <div id="diag" class="muted small"></div>
-    <footer class="attribution muted small">Satellite: Esri World Imagery · Routing: OSRM public demo (snap may prefer roads/trails)</footer>
+    <footer class="attribution muted small">Satellite: Esri World Imagery · Routing: OSRM public demo</footer>
   </div>
 
   <div id="map"></div>
