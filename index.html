@@ -3,25 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simple Shipping — Simple Pathfinding</title>
+  <title>Simple Shipping — Simple Pathfinding (Car)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="sidebar">
     <h1>World Map</h1>
-    <p class="muted">Simple pathfinding: choose Car (fastest on main roads) or Bike/Walk (prefer trails and smaller paths). Click the map to set Start and End points, then the route will be calculated automatically.</p>
+    <p class="muted">Simple pathfinding: Car mode only (fastest on main roads). Click the map to set Start and End points; the route will be calculated automatically.</p>
 
     <div id="controls"></div>
 
     <div class="row">
-      <label class="mode"> <input type="radio" name="mode" id="modeCar" checked> Car</label>
-      <label class="mode"> <input type="radio" name="mode" id="modeBike"> Bike / Walk</label>
+      <div class="mode">Mode: Car</div>
       <button id="reset" class="btn outline">Reset</button>
     </div>
 
     <div id="diag" class="muted small"></div>
-    <footer class="attribution muted small">Satellite: Esri World Imagery · Routing: OSRM public demo</footer>
+    <footer class="attribution muted small">Satellite: Esri World Imagery · Routing: OSRM public demo (driving profile)</footer>
   </div>
 
   <div id="map"></div>
