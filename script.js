@@ -1,4 +1,4 @@
-// script.js - drawing toggled by pressing Space (press once to start drawing, press Space again to snap)
+// script.js - drawing & improved trail snapping to prefer a single track close to the sketch
 
 let routeLayer = null;
 let markers = [];
@@ -107,7 +107,7 @@ window.addEventListener('keydown', async (e)=>{
   }
 });
 
-// snapping: try OSRM Match API first, fallback to Route
+// snapping: try OSRM Match API first, fallback to Route. For trail profile, enforce closeness to the sketch to avoid detours.
 async function snapDrawnPath(){
   addMessageOverlay('Snapping drawn path to network...');
   const sample = sampleLatLngs(drawnPoints, 160); // more samples for mouse-move drawing
@@ -120,6 +120,10 @@ async function snapDrawnPath(){
   if (trailOn && !roadOn) profile = 'foot';
   else if (trailOn && roadOn) profile = 'foot';
 
+  // precompute drawn points in layer (pixel) space for distance checks
+  const drawnLayerPoints = sample.map(p => map.latLngToLayerPoint(p));
+  const thresholdPx = 20; // how close (in pixels) the matched geometry must remain to the sketch (tweakable)
+
   // Try Match API - better for snapping traces and avoiding small side roads
   const matchUrl = `https://router.project-osrm.org/match/v1/${profile}/${coords}?overview=full&geometries=geojson&annotations=true`;
   try{
@@ -127,18 +131,29 @@ async function snapDrawnPath(){
     if (!res.ok) throw new Error('Match network error');
     const j = await res.json();
     if (j.code === 'Ok' && j.matchings && j.matchings.length){
-      // choose the longest matching (highest confidence)
-      let best = j.matchings.reduce((a,b)=> ( (a && a.geometry && a.geometry.coordinates.length) > (b && b.geometry && b.geometry.coordinates.length) ? a : b));
+      // choose the matching that stays closest to the sketch and is reasonably long
+      let best = null; let bestScore = Infinity;
+      for (const m of j.matchings){
+        if (!m.geometry || !m.geometry.coordinates) continue;
+        const score = scoreMatchingAgainstSketch(m.geometry.coordinates, drawnLayerPoints);
+        // lower score is better (mean pixel distance), penalize very short matchings
+        const len = m.geometry.coordinates.length;
+        const penalized = score * (1 + Math.max(0, 100 - len) / 100); // favor longer matches
+        if (penalized < bestScore){ bestScore = penalized; best = m; }
+      }
       if (best && best.geometry){
-        // Post-process: prune short dead-end branches by removing tiny segments at the ends
-        const pruned = pruneShortSegments(best.geometry, 10); // 10 meters threshold
-        clearRoute();
-        routeLayer = L.geoJSON(pruned, { style: { color: '#ff8c42', weight: 4, opacity: 0.95 } }).addTo(map);
-        map.fitBounds(routeLayer.getBounds(), { padding: [20,20] });
-        addMessageOverlay('Snapped (match) route drawn.');
-        if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
-        drawnPoints = [];
-        return;
+        // prune to the single best contiguous segment close to the sketch
+        const pruned = pruneToClosestSegment(best.geometry, drawnLayerPoints, thresholdPx);
+        if (pruned && pruned.coordinates && pruned.coordinates.length > 1){
+          const final = pruneShortSegments(pruned, 8); // also remove tiny ends (meters)
+          clearRoute();
+          routeLayer = L.geoJSON(final, { style: { color: '#ff8c42', weight: 4, opacity: 0.95 } }).addTo(map);
+          map.fitBounds(routeLayer.getBounds(), { padding: [20,20] });
+          addMessageOverlay('Snapped (match) route drawn (trail-preferred).');
+          if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
+          drawnPoints = [];
+          return;
+        }
       }
     }
     // otherwise fall back
@@ -146,17 +161,17 @@ async function snapDrawnPath(){
     console.warn('Match failed, falling back to route:', err);
   }
 
-  // Fallback: use route endpoint to compute a path visiting sampled points in order
+  // Fallback: use route endpoint to compute a path visiting sampled points in order, then prune
   try{
     const routeUrl = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
     const rres = await fetch(routeUrl);
     if (!rres.ok) throw new Error('Route network error');
     const jr = await rres.json();
     if (jr.code === 'Ok' && jr.routes && jr.routes.length){
-      // prune too-short end segments
-      const pruned = pruneShortSegments(jr.routes[0].geometry, 10);
+      const pruned = pruneToClosestSegment(jr.routes[0].geometry, drawnLayerPoints, thresholdPx) || jr.routes[0].geometry;
+      const final = pruneShortSegments(pruned, 8);
       clearRoute();
-      routeLayer = L.geoJSON(pruned, { style: { color: '#ff8c42', weight: 4, opacity: 0.95 } }).addTo(map);
+      routeLayer = L.geoJSON(final, { style: { color: '#ff8c42', weight: 4, opacity: 0.95 } }).addTo(map);
       map.fitBounds(routeLayer.getBounds(), { padding: [20,20] });
       addMessageOverlay('Snapped (route) drawn.');
       if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
@@ -170,9 +185,58 @@ async function snapDrawnPath(){
   }
 }
 
-// pruneShortSegments: removes tiny branches/segments at the start/end shorter than threshold meters
+// compute a simple mean distance score (in pixels) between a matching coordinates array and the drawn sketch (layer points)
+function scoreMatchingAgainstSketch(matchingCoords, drawnLayerPoints){
+  if (!matchingCoords || matchingCoords.length === 0) return Infinity;
+  let sum = 0; let count = 0;
+  for (const c of matchingCoords){
+    const pt = map.latLngToLayerPoint([c[1], c[0]]);
+    // compute min distance to drawn segments using Leaflet's LineUtil
+    let minD = Infinity;
+    for (let i=1;i<drawnLayerPoints.length;i++){
+      const d = L.LineUtil.pointToSegmentDistance(pt, drawnLayerPoints[i-1], drawnLayerPoints[i]);
+      if (d < minD) minD = d;
+    }
+    if (minD === Infinity) minD = 9999;
+    sum += minD; count++;
+  }
+  return sum / Math.max(1, count);
+}
+
+// pruneToClosestSegment: given a LineString geometry and the drawnLayerPoints, extract the largest contiguous subsequence of coordinates that stays within thresholdPx to the drawn sketch
+function pruneToClosestSegment(geometry, drawnLayerPoints, thresholdPx){
+  if (!geometry || !geometry.coordinates || geometry.coordinates.length === 0) return null;
+  const coords = geometry.coordinates;
+  const keep = new Array(coords.length).fill(false);
+  for (let i=0;i<coords.length;i++){
+    const pt = map.latLngToLayerPoint([coords[i][1], coords[i][0]]);
+    // compute min distance to drawn segments
+    let minD = Infinity;
+    for (let j=1;j<drawnLayerPoints.length;j++){
+      const d = L.LineUtil.pointToSegmentDistance(pt, drawnLayerPoints[j-1], drawnLayerPoints[j]);
+      if (d < minD) minD = d;
+    }
+    if (minD <= thresholdPx) keep[i] = true;
+  }
+  // find the longest contiguous run of true in keep[]
+  let bestStart = 0, bestLen = 0;
+  let curStart = -1, curLen = 0;
+  for (let i=0;i<keep.length;i++){
+    if (keep[i]){
+      if (curStart === -1) curStart = i; curLen++;
+    } else {
+      if (curLen > bestLen){ bestLen = curLen; bestStart = curStart; }
+      curStart = -1; curLen = 0;
+    }
+  }
+  if (curLen > bestLen){ bestLen = curLen; bestStart = curStart; }
+  if (bestLen <= 1) return null; // nothing meaningful
+  const outCoords = coords.slice(bestStart, bestStart + bestLen);
+  return { type: 'LineString', coordinates: outCoords };
+}
+
+// pruneShortSegments: removes tiny distances at start/end shorter than thresholdMeters
 function pruneShortSegments(geojson, thresholdMeters){
-  // operate on LineString geometries (assume input geometry is LineString or MultiLineString)
   function lengthBetween(a,b){
     const latlngA = L.latLng(a[1], a[0]);
     const latlngB = L.latLng(b[1], b[0]);
@@ -201,7 +265,6 @@ function pruneShortSegments(geojson, thresholdMeters){
     if (endRemoved) coords = coords.slice(0, coords.length - endRemoved);
     return { type: 'LineString', coordinates: coords };
   }
-  // for MultiLineString, just return as-is (or flatten)
   return geojson;
 }
 
