@@ -1,18 +1,29 @@
-# Simple Shipping — Draw & Snap
+# Simple Shipping — Simplified Pathfinding
 
-This update adds a drawing tool to the map. You can toggle Draw mode and sketch a path directly on the map. When you press Enter the sketch is snapped to roads or trails (depending on the toggles) using the OSRM routing service.
+This update removes the previous freehand draw/snap feature and replaces it with a simple, reliable pathfinding flow:
 
-How to use
-- Click "Draw" and hold the mouse button while dragging to sketch a path. On touch devices touch and drag.
-- Toggle Road / Trail to indicate preference for snapping (Trail uses OSRM foot profile, Road uses driving).
-- Press Enter to snap the sketch to the network and draw the resulting route.
-- Press Escape to cancel drawing mode.
+How it works
+- Choose mode: Car or Bike/Walk (radio buttons in the sidebar).
+- Click the map to set Start (first click) and End (second click). Markers are draggable — moving them updates the route.
+- The app requests a route from the public OSRM demo server:
+  - Car mode uses the driving profile (fastest on main roads).
+  - Bike/Walk mode attempts the bicycle profile first (to prefer smaller ways/trails) and falls back to the walking/foot profile if needed.
+- The route is drawn on the map and the view is fit to it.
 
-Limitations
-- Snapping uses the public OSRM demo server and is subject to rate limits; for production use please host your own OSRM instance or use a commercial routing provider.
-- Trail snapping quality depends on OSM coverage of walking trails.
+Notes & limitations
+- This uses the public OSRM demo server (router.project-osrm.org) — it's fine for demos but can be rate-limited or slow. For production, run your own routing server or use a paid provider.
+- The routing engine decides what counts as "main roads" or "trails" based on OSM data and the routing profile. We can't force it to only use certain classes without a custom routing backend or filtering heuristics.
 
-Next steps (optional)
-- Add geocoding so drawn sketches can be automatically offset/translated by place names.
-- Improve snapping by using OSRM Match API to better snap raw GPS traces.
-- Allow users to edit snapped routes and save/export GeoJSON.
+Next improvements you might want
+- Post-process alternatives: analyze route annotations (way type, surface) and pick the best candidate (e.g. prefer paved main roads for Car and prefer footway/tracks for Bike/Walk).
+- Add text-based start/end entry (geocoding) so users can type addresses or place names.
+- Add an ‘avoid highways’ toggle or a slider to bias route selection.
+
+How to run locally
+1. Pull the repo and run a simple static server from the repo root:
+   python3 -m http.server 8000
+2. Open http://localhost:8000 in your browser.
+
+If routing fails
+- Check DevTools Network for requests to router.project-osrm.org.
+- If tiles show "API required" replace the tile URL in script.js or switch to OSM tiles in index.html.

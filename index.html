@@ -3,28 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simple Shipping — Satellite Map with Draw & Snap</title>
+  <title>Simple Shipping — Simple Pathfinding</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="sidebar">
     <h1>World Map</h1>
-    <p class="muted">Press Space to start drawing a freehand path; press Space again to snap it to roads or trails. Use the toggles to prefer Road or Trail routing.</p>
+    <p class="muted">Simple pathfinding: choose Car (fastest on main roads) or Bike/Walk (prefer trails and smaller paths). Click the map to set Start and End points, then the route will be calculated automatically.</p>
 
     <div id="controls"></div>
 
     <div class="row">
-      <button id="satToggle" class="btn">Satellite</button>
+      <label class="mode"> <input type="radio" name="mode" id="modeCar" checked> Car</label>
+      <label class="mode"> <input type="radio" name="mode" id="modeBike"> Bike / Walk</label>
       <button id="reset" class="btn outline">Reset</button>
     </div>
-
-    <div class="row" style="margin-top:8px;align-items:center">
-      <label class="toggle"><input type="checkbox" id="roadToggle" checked><span>Road</span></label>
-      <label class="toggle"><input type="checkbox" id="trailToggle"><span>Trail</span></label>
-    </div>
-
-    <hr />
 
     <div id="diag" class="muted small"></div>
     <footer class="attribution muted small">Satellite: Esri World Imagery · Routing: OSRM public demo</footer>
