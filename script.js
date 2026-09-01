@@ -1,6 +1,6 @@
-// script.js - Satellite map with a simple chat-driven routing feature
+// script.js - add drawing + snapping to roads/trails
 
-// Helper: city waypoints for Denmark (used for 'around denmark')
+// Existing Denmark waypoints for chat routing
 const DENMARK_WAYPOINTS = [
   { name: 'Copenhagen', coord: [12.5683, 55.6761] },
   { name: 'Malmö', coord: [13.0038, 55.6050] },
@@ -32,13 +32,12 @@ function clearRoute(){
 
 function buildOSRMCoords(points){
   // OSRM expects lon,lat pairs separated by ;
-  return points.map(p => p.coord ? (p.coord[0] + ',' + p.coord[1]) : (p[0] + ',' + p[1])).join(';');
+  return points.map(p => p.coord ? (p.coord[0] + ',' + p.coord[1]) : (p[1] + ',' + p[0])).join(';');
 }
 
 async function requestOSRMRoute(profile, points){
   try{
     const coords = buildOSRMCoords(points);
-    // ask OSRM for a route visiting the points in order
     const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
     addMessage('Requesting route from OSRM...', 'system');
     const res = await fetch(url);
@@ -65,26 +64,21 @@ function placeMarkers(points){
   });
 }
 
-// parse chat text into action
+// Chat parsing (keeps previous functionality)
 function parseAndExecute(text){
   const t = text.toLowerCase();
-  // default profile: driving
   let profile = 'driving';
   if (t.includes('walk') || t.includes('walking') || t.includes('trail') || t.includes('hike')) profile = 'foot';
 
   if (t.includes('around') && t.includes('denmark')){
     addMessage(`Planning a route around Denmark, profile: ${profile}`,'system');
-    // use DANISH waypoints
     const points = DENMARK_WAYPOINTS;
     placeMarkers(points);
-    // OSRM expects lon,lat pairs; our points already in [lon,lat]
     requestOSRMRoute(profile, points)
       .then(geo => { drawRoute(geo); addMessage('Route drawn.'); })
       .catch(err => { addMessage('Routing failed: ' + err.message); });
     return;
   }
-
-  // simple 'from X to Y' handling could be added, but for now respond with help
   addMessage("Sorry — I only support simple 'around <country>' requests right now (try: 'around Denmark by car' or 'around Denmark walking').", 'system');
 }
 
@@ -99,14 +93,152 @@ const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
 
 esriSat.addTo(map);
 
-// UI hookups
+// --- Drawing tools ---
+let isDrawMode = false;
+let isMouseDown = false;
+let drawnPoints = []; // array of LatLng
+let tempLine = null;
+let cursorDot = null;
+
+function enableDrawMode(enable){
+  isDrawMode = enable;
+  const body = document.body;
+  if (enable){
+    body.classList.add('drawing-cursor');
+    if (!cursorDot){
+      cursorDot = document.createElement('div'); cursorDot.className = 'cursor-dot'; document.body.appendChild(cursorDot);
+    }
+    cursorDot.style.display = 'block';
+    addMessage('Draw mode ON: hold mouse and drag to draw. Press Enter to snap to roads/trails.', 'system');
+  } else {
+    body.classList.remove('drawing-cursor');
+    if (cursorDot) cursorDot.style.display = 'none';
+    addMessage('Draw mode OFF', 'system');
+  }
+}
+
+map.getContainer().addEventListener('mousedown', (e)=>{
+  if (!isDrawMode) return;
+  isMouseDown = true;
+  drawnPoints = [];
+  if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
+  const p = map.mouseEventToLatLng(e);
+  drawnPoints.push(p);
+  tempLine = L.polyline(drawnPoints, { color: '#ff8c42', weight: 3, dashArray: '6 4' }).addTo(map);
+});
+
+map.getContainer().addEventListener('mousemove', (e)=>{
+  if (!isDrawMode) return;
+  const p = map.mouseEventToLatLng(e);
+  // update floating cursor dot
+  if (cursorDot){ cursorDot.style.left = e.clientX + 8 + 'px'; cursorDot.style.top = e.clientY + 8 + 'px'; }
+  if (isMouseDown){
+    // add point if moved a small distance
+    const last = drawnPoints[drawnPoints.length-1];
+    if (!last || last.distanceTo(p) > 5){
+      drawnPoints.push(p);
+      if (tempLine) tempLine.setLatLngs(drawnPoints);
+      else tempLine = L.polyline(drawnPoints, { color: '#ff8c42', weight: 3, dashArray: '6 4' }).addTo(map);
+    }
+  }
+});
+
+map.getContainer().addEventListener('mouseup', (e)=>{
+  if (!isDrawMode) return;
+  isMouseDown = false;
+  // keep the drawn line until Enter pressed
+});
+
+// touch support
+map.getContainer().addEventListener('touchstart', (e)=>{
+  if (!isDrawMode) return;
+  isMouseDown = true;
+  drawnPoints = [];
+  if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
+  const touch = e.touches[0]; const p = map.mouseEventToLatLng(touch);
+  drawnPoints.push(p);
+  tempLine = L.polyline(drawnPoints, { color: '#ff8c42', weight: 3, dashArray: '6 4' }).addTo(map);
+});
+map.getContainer().addEventListener('touchmove', (e)=>{
+  if (!isDrawMode) return;
+  const touch = e.touches[0]; const p = map.mouseEventToLatLng(touch);
+  if (!p) return;
+  const last = drawnPoints[drawnPoints.length-1];
+  if (!last || last.distanceTo(p) > 5){ drawnPoints.push(p); if (tempLine) tempLine.setLatLngs(drawnPoints); }
+});
+map.getContainer().addEventListener('touchend', (e)=>{ if (!isDrawMode) return; isMouseDown = false; });
+
+// keyboard: Enter to snap, Esc to cancel
+window.addEventListener('keydown', (e)=>{
+  if (!isDrawMode) return;
+  if (e.key === 'Enter'){
+    e.preventDefault();
+    if (!drawnPoints || drawnPoints.length < 2){ addMessage('Draw a path first (hold and drag), then press Enter.', 'system'); return; }
+    snapDrawnPath();
+  }
+  if (e.key === 'Escape'){
+    // cancel drawing
+    if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
+    drawnPoints = [];
+    enableDrawMode(false);
+  }
+});
+
+async function snapDrawnPath(){
+  addMessage('Snapping drawn path to network...', 'system');
+  // build simple sampling of points to avoid huge URLs
+  const sample = sampleLatLngs(drawnPoints, 100); // at most 100 points
+  // Build coords in lon,lat for OSRM route
+  const coords = sample.map(ll => `${ll.lng},${ll.lat}`).join(';');
+  // decide profile
+  const trailOn = document.getElementById('trailToggle').checked;
+  const roadOn = document.getElementById('roadToggle').checked;
+  let profile = 'driving';
+  if (trailOn && !roadOn) profile = 'foot';
+  else if (trailOn && roadOn) profile = 'foot'; // prefer trail when both on
+  else profile = 'driving';
+  const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
+  try{
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Network response not ok');
+    const j = await res.json();
+    if (j.code !== 'Ok' || !j.routes || j.routes.length === 0) throw new Error('No route found');
+    const geo = j.routes[0].geometry;
+    // draw snapped route
+    clearRoute();
+    routeLayer = L.geoJSON(geo, { style: { color: '#ff8c42', weight: 4, opacity: 0.95 } }).addTo(map);
+    map.fitBounds(routeLayer.getBounds(), { padding: [20,20] });
+    addMessage('Snapped route drawn.', 'system');
+    // cleanup temp draw
+    if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
+    drawnPoints = [];
+    enableDrawMode(false);
+  }catch(err){
+    addMessage('Snap failed: ' + err.message, 'system');
+  }
+}
+
+function sampleLatLngs(arr, maxPoints){
+  if (arr.length <= maxPoints) return arr.slice();
+  const step = Math.ceil(arr.length / maxPoints);
+  const out = [];
+  for (let i=0;i<arr.length;i+=step) out.push(arr[i]);
+  if (out[out.length-1] !== arr[arr.length-1]) out.push(arr[arr.length-1]);
+  return out;
+}
+
+// --- UI hookups ---
 document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('satToggle').addEventListener('click', ()=>{
     if (!map.hasLayer(esriSat)){ map.addLayer(esriSat); if (map.hasLayer(osm)) map.removeLayer(osm); }
   });
 
+  document.getElementById('drawToggle').addEventListener('click', ()=>{
+    enableDrawMode(!isDrawMode);
+  });
+
   document.getElementById('reset').addEventListener('click', ()=>{
-    clearRoute(); map.setView([56.0, 9.0], 6);
+    clearRoute(); if (tempLine) { map.removeLayer(tempLine); tempLine = null; } drawnPoints = []; map.setView([56.0, 9.0], 6); enableDrawMode(false);
   });
 
   const send = document.getElementById('send');
@@ -118,5 +250,5 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
   input.addEventListener('keydown', e=>{ if (e.key === 'Enter'){ send.click(); } });
 
-  addMessage('Hello — ask me to plan simple routes. Try: "around Denmark by car"', 'system');
+  addMessage('Hello — use Draw to sketch a path and press Enter to snap it to roads or trails. Try: "around Denmark by car" in the chat.', 'system');
 });

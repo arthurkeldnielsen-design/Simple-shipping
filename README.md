@@ -1,22 +1,18 @@
-# Simple Shipping — Chat-driven Routing
+# Simple Shipping — Draw & Snap
 
-This update removes the Enhance option and adds a small chat box UI to the sidebar. You can now type simple navigation requests such as:
+This update adds a drawing tool to the map. You can toggle Draw mode and sketch a path directly on the map. When you press Enter the sketch is snapped to roads or trails (depending on the toggles) using the OSRM routing service.
 
-- "around Denmark by car"
-- "around Denmark walking"
+How to use
+- Click "Draw" and hold the mouse button while dragging to sketch a path. On touch devices touch and drag.
+- Toggle Road / Trail to indicate preference for snapping (Trail uses OSRM foot profile, Road uses driving).
+- Press Enter to snap the sketch to the network and draw the resulting route.
+- Press Escape to cancel drawing mode.
 
-How it works
-- The chat parser recognizes "around <country>" for Denmark (built-in) and picks a set of waypoints (major cities).
-- It sends the waypoint list to the public OSRM demo server (router.project-osrm.org) using the chosen profile: `driving` for roads and `foot` for walking/trails.
-- The returned route geometry is drawn on the map and the map view is fit to the route.
+Limitations
+- Snapping uses the public OSRM demo server and is subject to rate limits; for production use please host your own OSRM instance or use a commercial routing provider.
+- Trail snapping quality depends on OSM coverage of walking trails.
 
-Notes and limits
-- This is a small demo parser; adding general geocoding would let you accept arbitrary place names. We can integrate Nominatim for free geocoding.
-- Routing uses the public OSRM demo server — it's free for testing but subject to usage limits. For production or high-volume use, use your own routing server or a provider with an API key.
-
-If you want me to also add:
-- Geocoding (Nominatim) so you can say "around Portugal" and it looks up country bounds automatically.
-- Support for arbitrary "from A to B" directions.
-- A small "follow walking trails" enhancement that prefers foot profile and shows trailheads.
-
-Tell me which extra features you want and I’ll push them next.
+Next steps (optional)
+- Add geocoding so drawn sketches can be automatically offset/translated by place names.
+- Improve snapping by using OSRM Match API to better snap raw GPS traces.
+- Allow users to edit snapped routes and save/export GeoJSON.

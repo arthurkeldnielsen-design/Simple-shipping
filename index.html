@@ -3,20 +3,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simple Shipping — Satellite Map with Chat Routing</title>
+  <title>Simple Shipping — Satellite Map with Draw & Snap</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="sidebar">
     <h1>World Map</h1>
-    <p class="muted">Use the chat to ask for simple navigation tasks, e.g. "around Denmark by car" or "around Denmark walking". The map will follow roads or walking trails when possible.</p>
+    <p class="muted">Draw a path, then press Enter to snap it to roads or trails. Use the toggles to prefer Road or Trail routing.</p>
 
     <div id="controls"></div>
 
     <div class="row">
       <button id="satToggle" class="btn">Satellite</button>
+      <button id="drawToggle" class="btn">Draw</button>
       <button id="reset" class="btn outline">Reset</button>
+    </div>
+
+    <div class="row" style="margin-top:8px;align-items:center">
+      <label class="toggle"><input type="checkbox" id="roadToggle" checked><span>Road</span></label>
+      <label class="toggle"><input type="checkbox" id="trailToggle"><span>Trail</span></label>
     </div>
 
     <hr />
@@ -30,7 +36,7 @@
     </div>
 
     <div id="diag" class="muted small"></div>
-    <footer class="attribution muted small">Satellite: Esri World Imagery · Streets: OpenStreetMap</footer>
+    <footer class="attribution muted small">Satellite: Esri World Imagery · Routing: OSRM public demo (snap may prefer roads/trails)</footer>
   </div>
 
   <div id="map"></div>
