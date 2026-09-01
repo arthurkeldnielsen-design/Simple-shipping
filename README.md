@@ -1,22 +1,26 @@
-# Simple Shipping — Satellite Map Demo
+# Simple Shipping — Satellite Map (Esri World Imagery)
 
-This replaces the previous demo. It uses Esri World Imagery tiles for satellite imagery and OpenStreetMap tiles for streets.
+This demo uses free, stationary satellite imagery tiles (Esri World Imagery) and OpenStreetMap street tiles. Esri's World Imagery provides high-resolution satellite imagery tiles suitable for demos and prototypes without requiring an API key.
 
-Important notes
-- "Live satellite footage" (real-time video from satellites) is not available as free browser tiles. This demo uses high-resolution satellite imagery tiles (Esri World Imagery) which are updated periodically but are not live.
-- If you need near-real-time or frequently updated imagery, you must use specialized APIs (Planet, Maxar, Sentinel hub) which typically require an API key and processing.
+Files
+- index.html — demo page (Leaflet + Esri)
+- style.css — layout and controls
+- script.js — map initialization, layer toggles, and zoom-to-place buttons
 
-How to run
-1. Open `index.html` in a modern browser (internet required for tiles).
-2. Or run a local server from the repo folder to avoid some browser restrictions:
+How to run locally
+1. Clone the repo:
+   git clone https://github.com/arthurkeldnielsen-design/Simple-shipping
+   cd Simple-shipping
+2. Serve with a simple static server (recommended):
    python3 -m http.server 8000
-   then open http://localhost:8000
+   Open http://localhost:8000
+3. Click a continent or country in the left sidebar to zoom in. Toggle between Satellite and Street.
 
-What I changed
-- Replaced project files with a fresh demo that:
-  - Shows satellite tiles by default (Esri)
-  - Lets you toggle to street tiles (OpenStreetMap)
-  - Keeps the continent/country buttons for zooming
-  - Adds error overlay and robust initialization
+Deploy to GitHub Pages
+- You can host this as a static site using GitHub Pages: go to repository Settings → Pages and set the site source to the `main` branch (root) and save.
 
-If you want real-time imagery or a specific provider (Mapbox/Google/Planet), tell me which provider and whether you have an API key — I can integrate that instead. Otherwise I can also add clickable GeoJSON outlines so you can click countries directly to zoom (instead of buttons).
+Notes about "live" imagery
+- Esri World Imagery is not live video; it is periodically updated satellite imagery suitable for demos.
+- For true near-real-time imagery you would need commercial providers (Planet, Maxar) or satellite processing APIs (Sentinel Hub), which typically require accounts and API keys.
+
+If you want clickable country outlines (GeoJSON) or a small gameplay mechanic (deliveries, scoring), tell me which and I will add it next.
