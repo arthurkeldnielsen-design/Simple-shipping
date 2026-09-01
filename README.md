@@ -1,24 +1,16 @@
-# Simple Shipping — Dark Satellite Map
+# Simple Shipping — Dark Satellite Map (updated)
 
-This commit updates the demo to a clean dark UI and ensures free satellite/street tiles are used with fallbacks.
+This update removes the old dark basemap option and adds an "Enhance" button that requests higher-resolution satellite tiles when you need maximum quality while zoomed in.
 
-What it includes
-- Dark theme (style.css) with a left sidebar and map on the right.
-- script.js: Leaflet map using CartoDB Dark tiles as the default base, Esri World Imagery for satellite, and OpenStreetMap as a final fallback.
-- Robust tile error handling and a small on-page diagnostic overlay.
+How it works
+- Default base: Esri World Imagery (satellite)
+- Enhance: switches to an enhanced satellite tile layer that uses detectRetina and tile/zoom hints to request higher-resolution tiles where available. If enhanced tiles fail, it falls back to standard satellite, then OpenStreetMap.
 
-How to run locally (free)
-1. Clone or pull the repo and open the folder.
-2. Serve with a static server (recommended):
-   python3 -m http.server 8000
-   Open http://localhost:8000
+Usage
+- Open the page (serve locally or deploy to GitHub Pages).
+- Click "Satellite" to ensure standard satellite tiles are used.
+- Click "Enhance" to request maximum available tile quality. The map will try to zoom one level in to encourage higher-resolution tiles to load.
 
-If the map is blank
-- Disable adblock/privacy extensions that might block tile hosts.
-- Check the browser console for network errors (requests to cartocdn, arcgisonline, or tile.openstreetmap.org).
-- Try another network or hotspot if you are behind a firewall.
-
-Next steps (optional)
-- Add clickable GeoJSON country outlines for direct map clicks.
-- Add a small gameplay loop (deliveries, scoring).
-- Deploy to GitHub Pages (free): enable Pages in repo settings to serve the `main` branch.
+Notes
+- "Enhance" cannot force new imagery beyond what the provider exposes. For truly higher-resolution commercial imagery you would need a provider/API with explicit high-res tiles or an access token.
+- This is implemented with free tile endpoints (Esri and OSM). If you later add a paid provider (Mapbox/Google/Planet) we can wire it into the enhance flow behind an API key.

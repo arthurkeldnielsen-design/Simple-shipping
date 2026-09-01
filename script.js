@@ -1,28 +1,32 @@
-// script.js - dark-themed Leaflet map with Esri satellite + Carto Dark fallback
+// script.js - Satellite + Enhance option for maximum tile quality
 
 document.addEventListener('DOMContentLoaded', () => {
   // Create map
   const map = L.map('map', { worldCopyJump: true }).setView([20, 0], 2);
   window._map = map; // expose for debugging
 
-  // Tile layers
+  // Satellite: Esri World Imagery (good high-resolution tiles)
   const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles © Esri',
     maxZoom: 19
   });
 
-  // dark basemap from CartoDB (no key required)
-  const cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CartoDB',
-    maxZoom: 19
+  // Enhanced satellite layer (tries to request higher-res tiles where available)
+  // Uses detectRetina and larger tileSize/zoomOffset hints for retina/high-res tiles
+  const esriEnhanced = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles © Esri',
+    maxZoom: 20,
+    detectRetina: true,
+    tileSize: 512,
+    zoomOffset: -1
   });
 
-  // fallback OSM (light) if needed
+  // Streets: OpenStreetMap (fallback)
   const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
 
-  // Start with dark base
-  let currentBase = 'dark';
-  cartoDark.addTo(map);
+  // Start with satellite layer
+  let currentBase = 'sat';
+  esriSat.addTo(map);
 
   // Simple places
   const places = {
@@ -66,20 +70,23 @@ document.addEventListener('DOMContentLoaded', () => {
   Object.entries(places).forEach(([k,v]) => controls.appendChild(makeBtn(k,v)));
 
   // UI toggles
-  document.getElementById('darkToggle').addEventListener('click', () => {
-    if (currentBase === 'dark') return;
-    removeBaseLayers();
-    cartoDark.addTo(map);
-    currentBase = 'dark';
-    clearOverlay();
-  });
-
   document.getElementById('satToggle').addEventListener('click', () => {
     if (currentBase === 'sat') return;
     removeBaseLayers();
     esriSat.addTo(map);
     currentBase = 'sat';
     clearOverlay();
+  });
+
+  document.getElementById('enhance').addEventListener('click', () => {
+    if (currentBase === 'enhanced') return;
+    removeBaseLayers();
+    esriEnhanced.addTo(map);
+    currentBase = 'enhanced';
+    clearOverlay();
+    // optionally zoom in one level to encourage higher-res tiles to load
+    const z = map.getZoom();
+    if (z < esriEnhanced.options.maxZoom) map.setZoom(Math.min(z+1, esriEnhanced.options.maxZoom));
   });
 
   document.getElementById('reset').addEventListener('click', () => {
@@ -90,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function removeBaseLayers(){
-    [esriSat, cartoDark, osm].forEach(l => { try{ if (map.hasLayer(l)) map.removeLayer(l); }catch(e){} });
+    [esriSat, esriEnhanced, osm].forEach(l => { try{ if (map.hasLayer(l)) map.removeLayer(l); }catch(e){} });
   }
 
   function highlightCircle(center){
@@ -117,17 +124,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // handle tile errors - try fallback if base fails
-  let satFailed = false;
-  esriSat.on('tileerror', () => {
-    satFailed = true;
-    showOverlay('Satellite tiles failed to load. Switching to dark basemap.');
+  esriEnhanced.on('tileerror', () => {
+    showOverlay('Enhanced tiles failed to load. Falling back to standard satellite.');
     removeBaseLayers();
-    cartoDark.addTo(map);
-    currentBase = 'dark';
+    esriSat.addTo(map);
+    currentBase = 'sat';
   });
 
-  cartoDark.on('tileerror', () => {
-    showOverlay('Dark basemap failed. Trying OpenStreetMap...');
+  esriSat.on('tileerror', () => {
+    showOverlay('Satellite tiles failed to load. Falling back to OpenStreetMap.');
     removeBaseLayers();
     osm.addTo(map);
     currentBase = 'osm';
