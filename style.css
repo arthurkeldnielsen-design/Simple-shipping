@@ -45,11 +45,81 @@ h1{margin:0 0 8px 0;font-size:20px}
 .mode{color:var(--muted);font-size:14px}
 .mode input{margin-right:8px}
 
+/* Scenery Toggle Styles */
+.scenery-toggle-container{
+  background:var(--card);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:12px;
+  padding:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.scenery-label{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  cursor:pointer;
+  user-select:none;
+  width:100%;
+}
+
+.scenery-checkbox{
+  display:none;
+}
+
+.toggle-track{
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-start;
+  width:56px;
+  height:32px;
+  background:#3a4450;
+  border-radius:16px;
+  padding:2px;
+  box-sizing:border-box;
+  transition:background-color 0.3s ease, box-shadow 0.3s ease;
+  position:relative;
+  flex-shrink:0;
+}
+
+.toggle-circle{
+  display:block;
+  width:28px;
+  height:28px;
+  background:white;
+  border-radius:50%;
+  transition:transform 0.3s ease, box-shadow 0.3s ease;
+  position:absolute;
+  left:2px;
+}
+
+.scenery-checkbox:checked + .toggle-track{
+  background:var(--accent);
+  box-shadow:0 0 12px rgba(30,144,255,0.4);
+}
+
+.scenery-checkbox:checked + .toggle-track .toggle-circle{
+  transform:translateX(24px);
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+
+.toggle-text{
+  font-weight:500;
+  font-size:14px;
+  color:#e6eef3;
+}
+
 .leaflet-container{background:#14202b}
 
-#map-overlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(8,12,16,0.88);color:#fff;padding:12px 16px;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.6);z-index:9999;max-width:90%;text-align:center}
+#map-overlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(8,12,16,0.88);color:#fff;padding:12px 16px;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.6);z-index:1000;font-size:14px;pointer-events:none}
 
 @media (max-width:760px){
   #sidebar{position:relative;width:100%;height:auto;border-right:none}
   #map{left:0;top:220px}
+  
+  .scenery-toggle-container{
+    margin-top:12px;
+  }
 }
