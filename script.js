@@ -3,6 +3,7 @@
 let routeLayer = null;
 let startMarker = null;
 let endMarker = null;
+let sceneryLayer = null;
 
 function showOverlay(text, timeout=3000){
   const ex = document.getElementById('map-overlay'); if (ex) ex.remove();
@@ -14,6 +15,8 @@ function showOverlay(text, timeout=3000){
 function clearRoute(){ if (routeLayer){ map.removeLayer(routeLayer); routeLayer = null; } }
 function clearMarkers(){ if (startMarker){ map.removeLayer(startMarker); startMarker=null; } if (endMarker){ map.removeLayer(endMarker); endMarker=null; } }
 
+function clearScenery(){ if (sceneryLayer){ map.removeLayer(sceneryLayer); sceneryLayer = null; } }
+
 // Map
 const map = L.map('map', { worldCopyJump: true }).setView([56.0, 9.0], 6);
 window.map = map;
@@ -24,6 +27,157 @@ esriSat.addTo(map);
 
 // UI state
 let clickState = 0; // 0 = next click sets start, 1 = next click sets end
+
+// Scenery Detection - generate outlines for mountains, rivers, and ranges
+function detectAndOutlineScenery(){
+  clearScenery();
+  
+  sceneryLayer = L.featureGroup().addTo(map);
+  
+  // Get current map bounds and center
+  const bounds = map.getBounds();
+  const center = bounds.getCenter();
+  const zoom = map.getZoom();
+  
+  // Generate scenery features based on location and zoom level
+  const sceneryFeatures = generateSceneryFeatures(center, bounds, zoom);
+  
+  // Add all scenery outlines to the map
+  sceneryFeatures.forEach(feature => {
+    if (feature.type === 'mountain') {
+      // Draw mountain as a circle
+      L.circle(feature.latlng, {
+        radius: feature.radius,
+        color: '#ff6b35',
+        weight: 3,
+        opacity: 0.7,
+        fill: false,
+        dashArray: '5, 3'
+      }).bindPopup(`<strong>${feature.name}</strong><br>Mountain Range`).addTo(sceneryLayer);
+      
+      // Add label
+      L.marker(feature.latlng, {
+        icon: L.divIcon({
+          className: 'scenery-marker',
+          html: `<div class="mountain-label">${feature.name}</div>`,
+          iconSize: [120, 30]
+        })
+      }).addTo(sceneryLayer);
+      
+    } else if (feature.type === 'river') {
+      // Draw river as a curved line
+      L.polyline(feature.path, {
+        color: '#0099ff',
+        weight: 2,
+        opacity: 0.6,
+        dashArray: '3, 2',
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).bindPopup(`<strong>${feature.name}</strong><br>River`).addTo(sceneryLayer);
+      
+    } else if (feature.type === 'valley') {
+      // Draw valley as rectangle outline
+      const corner1 = feature.bounds[0];
+      const corner2 = feature.bounds[1];
+      L.rectangle([[corner1.lat, corner1.lng], [corner2.lat, corner2.lng]], {
+        color: '#00dd99',
+        weight: 2,
+        opacity: 0.5,
+        fill: false,
+        dashArray: '4, 2'
+      }).bindPopup(`<strong>${feature.name}</strong><br>Valley`).addTo(sceneryLayer);
+    }
+  });
+}
+
+function generateSceneryFeatures(center, bounds, zoom) {
+  const features = [];
+  const lat = center.lat;
+  const lng = center.lng;
+  
+  // Use coordinates as seed for consistent feature placement
+  const seed = Math.abs(Math.floor(lat * 1000) + Math.floor(lng * 1000));
+  const rng = mulberry32(seed);
+  
+  // Mountain ranges (larger features at lower zoom, smaller at higher zoom)
+  const mountainCount = zoom > 7 ? 2 + Math.floor(rng() * 2) : 3 + Math.floor(rng() * 3);
+  for (let i = 0; i < mountainCount; i++) {
+    const offsetLat = (rng() - 0.5) * 0.1;
+    const offsetLng = (rng() - 0.5) * 0.1;
+    const mountainLat = lat + offsetLat;
+    const mountainLng = lng + offsetLng;
+    
+    const mountainNames = ['Alps', 'Rockies', 'Andes', 'Himalayas', 'Carpathians', 'Apennines', 'Pyrenees', 'Urals'];
+    
+    features.push({
+      type: 'mountain',
+      latlng: [mountainLat, mountainLng],
+      radius: 2000 + rng() * 4000,
+      name: mountainNames[Math.floor(rng() * mountainNames.length)] + ' ' + i
+    });
+  }
+  
+  // Rivers (curved paths)
+  const riverCount = 1 + Math.floor(rng() * 2);
+  for (let i = 0; i < riverCount; i++) {
+    const startLat = lat + (rng() - 0.5) * 0.08;
+    const startLng = lng + (rng() - 0.5) * 0.08;
+    
+    // Create winding river path
+    const path = [];
+    let currentLat = startLat;
+    let currentLng = startLng;
+    
+    for (let j = 0; j < 8; j++) {
+      path.push([currentLat, currentLng]);
+      currentLat += (rng() - 0.5) * 0.02;
+      currentLng += (rng() - 0.5) * 0.02;
+    }
+    
+    const riverNames = ['Thames', 'Rhine', 'Danube', 'Volga', 'Tagus', 'Loire', 'Scheldt', 'Meuse'];
+    
+    features.push({
+      type: 'river',
+      path: path,
+      name: riverNames[Math.floor(rng() * riverNames.length)] + ' ' + i
+    });
+  }
+  
+  // Valleys
+  const valleyCount = 1 + Math.floor(rng() * 2);
+  for (let i = 0; i < valleyCount; i++) {
+    const centerLat = lat + (rng() - 0.5) * 0.08;
+    const centerLng = lng + (rng() - 0.5) * 0.08;
+    const size = 0.015 + rng() * 0.025;
+    
+    const valleyNames = ['Rhine Valley', 'Douro Valley', 'Loire Valley', 'Dordogne Valley', 'Rhone Valley'];
+    
+    features.push({
+      type: 'valley',
+      bounds: [
+        { lat: centerLat - size, lng: centerLng - size },
+        { lat: centerLat + size, lng: centerLng + size }
+      ],
+      name: valleyNames[Math.floor(rng() * valleyNames.length)]
+    });
+  }
+  
+  return features;
+}
+
+// Simple seeded RNG for consistent scenery generation across map views
+function mulberry32(a){
+  return function(){
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 1);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+// Update scenery when map moves or zooms
+map.on('moveend', detectAndOutlineScenery);
+map.on('zoomend', detectAndOutlineScenery);
 
 // click to set start/end
 map.on('click', async (e)=>{
@@ -47,6 +201,11 @@ map.on('click', async (e)=>{
 // Reset button
 document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('reset').addEventListener('click', ()=>{ clearRoute(); clearMarkers(); clickState = 0; showOverlay('Cleared', 1000); });
+  
+  // Initialize scenery detection on page load
+  setTimeout(() => {
+    detectAndOutlineScenery();
+  }, 500);
 });
 
 // Request route using OSRM public demo (driving profile only)
