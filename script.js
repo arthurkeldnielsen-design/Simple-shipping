@@ -3,6 +3,7 @@
 let routeLayer = null;
 let startMarker = null;
 let endMarker = null;
+let trailLayerToggle = null;
 
 // Route mode state
 let trailsMode = false;
@@ -22,8 +23,17 @@ function clearMarkers(){ if (startMarker){ map.removeLayer(startMarker); startMa
 const map = L.map('map', { worldCopyJump: true }).setView([56.0, 9.0], 6);
 window.map = map;
 
+// Base satellite layer
 const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri', maxZoom: 19 });
 esriSat.addTo(map);
+
+// OpenStreetMap layer for trails overlay
+const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+  attribution: '&copy; OpenStreetMap contributors', 
+  maxZoom: 19,
+  opacity: 0.4,
+  zIndex: 100
+});
 
 // UI state
 let clickState = 0; // 0 = next click sets start, 1 = next click sets end
@@ -69,6 +79,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const trailsToggle = document.getElementById('trails-mode');
   trailsToggle.addEventListener('change', (e)=>{
     trailsMode = e.target.checked;
+    // Show OSM layer when trails mode is enabled for better visibility
+    if (trailsMode && !map.hasLayer(osmLayer)) {
+      osmLayer.addTo(map);
+    } else if (!trailsMode && map.hasLayer(osmLayer)) {
+      map.removeLayer(osmLayer);
+    }
     if (startMarker && endMarker) {
       requestRoute();
     }
@@ -105,22 +121,38 @@ async function requestRoute(){
   let profile = 'driving';
   let profileDisplay = 'car route';
   let routeColor = '#1e90ff';
+  let routeWeight = 6;
   
   if (trailsMode && !drivingMode) {
     // Trails only - use foot profile with option to exclude highways
     profile = 'foot';
     profileDisplay = 'walking route (trails & sidewalks)';
-    routeColor = '#00dd88';
+    routeColor = '#00ff00';
+    routeWeight = 8;
+    // Show OSM layer for trail visibility
+    if (!map.hasLayer(osmLayer)) {
+      osmLayer.addTo(map);
+    }
   } else if (!trailsMode && drivingMode) {
     // Driving only - use driving profile
     profile = 'driving';
     profileDisplay = 'driving route (roads only)';
     routeColor = '#1e90ff';
+    routeWeight = 6;
+    // Hide OSM layer
+    if (map.hasLayer(osmLayer)) {
+      map.removeLayer(osmLayer);
+    }
   } else if (trailsMode && drivingMode) {
     // Both enabled - prefer smaller roads and trails with bike profile
     profile = 'bike';
     profileDisplay = 'mixed route (all accessible paths)';
     routeColor = '#ffaa00';
+    routeWeight = 7;
+    // Show OSM layer for reference
+    if (!map.hasLayer(osmLayer)) {
+      osmLayer.addTo(map);
+    }
   }
 
   const url = `https://router.project-osrm.org/route/v1/${profile}/${s.lng},${s.lat};${t.lng},${t.lat}?overview=full&geometries=geojson&alternatives=false&steps=false`;
@@ -138,10 +170,11 @@ async function requestRoute(){
     routeLayer = L.geoJSON(route, { 
       style: { 
         color: routeColor, 
-        weight: 5, 
-        opacity: 0.95,
+        weight: routeWeight, 
+        opacity: 1,
         lineCap: 'round',
-        lineJoin: 'round'
+        lineJoin: 'round',
+        dashArray: profile === 'foot' ? '5, 3' : 'none'
       } 
     }).addTo(map);
     
