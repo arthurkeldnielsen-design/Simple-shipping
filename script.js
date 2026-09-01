@@ -1,28 +1,30 @@
-// script.js - Satellite + Street layers, safe initialization
+// script.js - dark-themed Leaflet map with Esri satellite + Carto Dark fallback
 
 document.addEventListener('DOMContentLoaded', () => {
-  // initialize map
+  // Create map
   const map = L.map('map', { worldCopyJump: true }).setView([20, 0], 2);
+  window._map = map; // expose for debugging
 
-  // Satellite: Esri World Imagery (good high-resolution tiles; not live video)
+  // Tile layers
   const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, USGS, NOAA',
+    attribution: 'Tiles © Esri',
     maxZoom: 19
   });
 
-  // Streets: OpenStreetMap
-  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
+  // dark basemap from CartoDB (no key required)
+  const cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CartoDB',
     maxZoom: 19
   });
 
-  // start with satellite layer
-  esriSat.addTo(map);
+  // fallback OSM (light) if needed
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
 
-  // layer variables for toggles
-  let currentBase = 'satellite';
+  // Start with dark base
+  let currentBase = 'dark';
+  cartoDark.addTo(map);
 
-  // Simple places to zoom to
+  // Simple places
   const places = {
     'North America': { bounds: [[72, -168], [7, -50]], type: 'continent' },
     'South America': { bounds: [[12, -92], [-56, -34]], type: 'continent' },
@@ -40,85 +42,106 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const controls = document.getElementById('controls');
-  let currentHighlight;
+  const diag = document.getElementById('diag');
+  let currentHighlight = null;
 
-  function makeButton(name, meta){
-    const btn = document.createElement('button');
-    btn.className = 'button-item ' + (meta.type === 'country' ? 'country' : 'continent');
-    btn.textContent = name;
-    btn.onclick = () => {
-      clearMapOverlay();
+  function makeBtn(name, meta){
+    const b = document.createElement('button');
+    b.className = 'btn ' + (meta.type === 'country' ? 'country' : 'continent');
+    b.textContent = name;
+    b.onclick = () => {
+      clearOverlay();
       if (meta.bounds){
-        map.fitBounds(meta.bounds, {padding: [20,20]});
+        map.fitBounds(meta.bounds, { padding: [20,20] });
         highlightBounds(meta.bounds);
       } else if (meta.center){
-        map.setView(meta.center, meta.zoom || 6, {animate:true});
+        map.setView(meta.center, meta.zoom || 6, { animate: true });
         highlightCircle(meta.center);
       }
       setTimeout(()=>map.invalidateSize(), 200);
-    }
-    return btn;
+    };
+    return b;
   }
 
-  for (const [name,meta] of Object.entries(places)){
-    controls.appendChild(makeButton(name, meta));
-  }
+  Object.entries(places).forEach(([k,v]) => controls.appendChild(makeBtn(k,v)));
 
-  // toggles
-  document.getElementById('satToggle').addEventListener('click', ()=>{
-    if (currentBase === 'satellite') return;
-    map.eachLayer(layer => { if (layer === osm) map.removeLayer(layer); });
+  // UI toggles
+  document.getElementById('darkToggle').addEventListener('click', () => {
+    if (currentBase === 'dark') return;
+    removeBaseLayers();
+    cartoDark.addTo(map);
+    currentBase = 'dark';
+    clearOverlay();
+  });
+
+  document.getElementById('satToggle').addEventListener('click', () => {
+    if (currentBase === 'sat') return;
+    removeBaseLayers();
     esriSat.addTo(map);
-    currentBase = 'satellite';
+    currentBase = 'sat';
+    clearOverlay();
   });
 
-  document.getElementById('streetToggle').addEventListener('click', ()=>{
-    if (currentBase === 'street') return;
-    map.eachLayer(layer => { if (layer === esriSat) map.removeLayer(layer); });
-    osm.addTo(map);
-    currentBase = 'street';
-  });
-
-  document.getElementById('reset').addEventListener('click', ()=>{
+  document.getElementById('reset').addEventListener('click', () => {
     map.setView([20,0],2);
     if (currentHighlight){ map.removeLayer(currentHighlight); currentHighlight = null; }
-    clearMapOverlay();
-    setTimeout(()=>map.invalidateSize(), 200);
+    clearOverlay();
+    setTimeout(()=>map.invalidateSize(),200);
   });
+
+  function removeBaseLayers(){
+    [esriSat, cartoDark, osm].forEach(l => { try{ if (map.hasLayer(l)) map.removeLayer(l); }catch(e){} });
+  }
 
   function highlightCircle(center){
     if (currentHighlight) map.removeLayer(currentHighlight);
-    currentHighlight = L.circle(center, {radius: 500000, color:'#ff3333', weight:2, fill:false}).addTo(map);
+    currentHighlight = L.circle(center, { radius: 500000, color: '#ff3333', weight: 2, fill:false }).addTo(map);
   }
 
   function highlightBounds(bounds){
     if (currentHighlight) map.removeLayer(currentHighlight);
-    currentHighlight = L.rectangle(bounds, {color:'#33cc33', weight:2, fill:false}).addTo(map);
+    currentHighlight = L.rectangle(bounds, { color: '#33cc33', weight: 2, fill:false }).addTo(map);
   }
 
   // overlay helpers
-  function showMapOverlay(text){
-    clearMapOverlay();
+  function showOverlay(text){
+    clearOverlay();
     const o = document.createElement('div');
     o.id = 'map-overlay';
     o.innerText = text;
     document.getElementById('map').appendChild(o);
+    diag.textContent = text;
+  }
+  function clearOverlay(){
+    const ex = document.getElementById('map-overlay'); if (ex) ex.remove(); diag.textContent = '';
   }
 
-  function clearMapOverlay(){
-    const existing = document.getElementById('map-overlay');
-    if (existing) existing.remove();
-  }
+  // handle tile errors - try fallback if base fails
+  let satFailed = false;
+  esriSat.on('tileerror', () => {
+    satFailed = true;
+    showOverlay('Satellite tiles failed to load. Switching to dark basemap.');
+    removeBaseLayers();
+    cartoDark.addTo(map);
+    currentBase = 'dark';
+  });
 
-  // handle tile errors (network or blocked)
-  esriSat.on('tileerror', ()=> showMapOverlay('Satellite tiles failed to load. Check network or try a local server.'));
-  osm.on('tileerror', ()=> showMapOverlay('Street tiles failed to load.'));
+  cartoDark.on('tileerror', () => {
+    showOverlay('Dark basemap failed. Trying OpenStreetMap...');
+    removeBaseLayers();
+    osm.addTo(map);
+    currentBase = 'osm';
+  });
 
-  // ensure correct size
+  osm.on('tileerror', () => {
+    showOverlay('Tile servers not reachable. Check network or disable blockers.');
+  });
+
+  // size fix
   setTimeout(()=>map.invalidateSize(), 200);
   window.addEventListener('resize', ()=> setTimeout(()=>map.invalidateSize(),150));
 
-  // debug
-  map.on('click', e=> console.log('Map clicked at', e.latlng));
-  window._map = map;
+  // debug click
+  map.on('click', e => console.log('Map clicked at', e.latlng));
+
 });

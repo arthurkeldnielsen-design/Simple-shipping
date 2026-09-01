@@ -1,26 +1,24 @@
-# Simple Shipping — Satellite Map (Esri World Imagery)
+# Simple Shipping — Dark Satellite Map
 
-This demo uses free, stationary satellite imagery tiles (Esri World Imagery) and OpenStreetMap street tiles. Esri's World Imagery provides high-resolution satellite imagery tiles suitable for demos and prototypes without requiring an API key.
+This commit updates the demo to a clean dark UI and ensures free satellite/street tiles are used with fallbacks.
 
-Files
-- index.html — demo page (Leaflet + Esri)
-- style.css — layout and controls
-- script.js — map initialization, layer toggles, and zoom-to-place buttons
+What it includes
+- Dark theme (style.css) with a left sidebar and map on the right.
+- script.js: Leaflet map using CartoDB Dark tiles as the default base, Esri World Imagery for satellite, and OpenStreetMap as a final fallback.
+- Robust tile error handling and a small on-page diagnostic overlay.
 
-How to run locally
-1. Clone the repo:
-   git clone https://github.com/arthurkeldnielsen-design/Simple-shipping
-   cd Simple-shipping
-2. Serve with a simple static server (recommended):
+How to run locally (free)
+1. Clone or pull the repo and open the folder.
+2. Serve with a static server (recommended):
    python3 -m http.server 8000
    Open http://localhost:8000
-3. Click a continent or country in the left sidebar to zoom in. Toggle between Satellite and Street.
 
-Deploy to GitHub Pages
-- You can host this as a static site using GitHub Pages: go to repository Settings → Pages and set the site source to the `main` branch (root) and save.
+If the map is blank
+- Disable adblock/privacy extensions that might block tile hosts.
+- Check the browser console for network errors (requests to cartocdn, arcgisonline, or tile.openstreetmap.org).
+- Try another network or hotspot if you are behind a firewall.
 
-Notes about "live" imagery
-- Esri World Imagery is not live video; it is periodically updated satellite imagery suitable for demos.
-- For true near-real-time imagery you would need commercial providers (Planet, Maxar) or satellite processing APIs (Sentinel Hub), which typically require accounts and API keys.
-
-If you want clickable country outlines (GeoJSON) or a small gameplay mechanic (deliveries, scoring), tell me which and I will add it next.
+Next steps (optional)
+- Add clickable GeoJSON country outlines for direct map clicks.
+- Add a small gameplay loop (deliveries, scoring).
+- Deploy to GitHub Pages (free): enable Pages in repo settings to serve the `main` branch.
